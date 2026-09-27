@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Report - Resume Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <a href="/" class="brand">
+                <span class="brand-title">Resume Analyzer</span>
+                <span class="tag-student">Student Project</span>
+            </a>
+            <nav class="nav-links">
+                <a href="/download" class="btn btn-success btn-small">Download PDF Report</a>
+                <a href="/" class="btn btn-secondary btn-small">Analyze Another Resume</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="container">
+
+        <!-- Top Status Banner -->
+        <div class="banner">
+            <div class="banner-meta">
+                <div>Document: <strong>{{ report.filename or "Resume PDF" }}</strong> &bull; Generated: <strong>{{ report.analyzed_at }}</strong></div>
+                <div style="margin-top: 4px; font-size: 12px; color: var(--text-subtle);">
+                    Word count: {{ report.word_count }} words &bull; Character count: {{ report.char_count }} chars
+                </div>
+            </div>
+            <div class="button-row" style="margin-top: 0;">
+                <a href="/download" class="btn btn-success">Download PDF Report</a>
+                <a href="/" class="btn btn-secondary">Upload New File</a>
+            </div>
+        </div>
+
+        <!-- 4 Stat Summary Cards -->
+        <div class="stats-grid">
+            
+            <!-- ATS Score -->
+            <div class="stat-box dark">
+                <div class="stat-label">ATS Score</div>
+                <div class="stat-number">{{ report.ats_score }}%</div>
+                <div class="stat-note">
+                    {% if report.ats_score >= 80 %}
+                        Solid ATS structure
+                    {% elif report.ats_score >= 60 %}
+                        Moderate ATS alignment
+                    {% else %}
+                        Needs structural revisions
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Job Match Score -->
+            <div class="stat-box blue">
+                <div class="stat-label">Job Match</div>
+                <div class="stat-number">
+                    {% if report.job_match %}
+                        {{ report.job_match.job_match_score }}%
+                    {% else %}
+                        --
+                    {% endif %}
+                </div>
+                <div class="stat-note">
+                    {% if report.job_match %}
+                        Resume ↔ Job description alignment
+                    {% else %}
+                        Job description not provided
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Skill Coverage -->
+            <div class="stat-box green">
+                <div class="stat-label">Skills Found</div>
+                <div class="stat-number">{{ report.found_skills|length }} <span style="font-size: 16px; font-weight: normal; color: var(--text-muted);">/ {{ total_skills }}</span></div>
+                <div class="stat-note">{{ report.skill_score }}% dictionary coverage</div>
+            </div>
+
+            <!-- Keyword Coverage -->
+            <div class="stat-box accent">
+                <div class="stat-label">Keywords Found</div>
+                <div class="stat-number">{{ report.found_keywords|length }} <span style="font-size: 16px; font-weight: normal; color: var(--text-muted);">/ {{ total_keywords }}</span></div>
+                <div class="stat-note">{{ report.keyword_score }}% action keyword match</div>
+            </div>
+
+        </div>
+
+        <!-- Job Match Results (If Job Description was provided) -->
+        {% if report.job_match %}
+        <div class="card" style="border-left: 4px solid var(--primary);">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Job Description Alignment</h2>
+                    <p class="card-desc">Comparison against requirements extracted from the target job posting.</p>
+                </div>
+                <span class="badge badge-info" style="font-size: 13px; padding: 4px 10px;">
+                    Job Match: {{ report.job_match.job_match_score }}%
+                </span>
+            </div>
+
+            <div class="grid-2col" style="margin-bottom: 16px;">
+                <div style="background-color: #fafbfc; border: 1px solid var(--border-light); border-radius: 6px; padding: 14px;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">
+                        Required Skills Match
+                    </div>
+                    <div style="font-size: 22px; font-weight: 700; font-family: var(--font-mono); margin: 4px 0;">
+                        {{ report.job_match.skill_match_score }}%
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill fill-green" style="width: {{ report.job_match.skill_match_score }}%;"></div>
+                    </div>
+                </div>
+
+                <div style="background-color: #fafbfc; border: 1px solid var(--border-light); border-radius: 6px; padding: 14px;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">
+                        Target Keywords Match
+                    </div>
+                    <div style="font-size: 22px; font-weight: 700; font-family: var(--font-mono); margin: 4px 0;">
+                        {{ report.job_match.keyword_match_score }}%
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill fill-dark" style="width: {{ report.job_match.keyword_match_score }}%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Matched vs Missing in Job -->
+            <div class="grid-2col">
+                <div>
+                    <strong style="font-size: 13px; color: var(--success-text);">Matching Job Skills:</strong>
+                    <div class="badge-list">
+                        {% if report.job_match.matched_skills %}
+                            {% for skill in report.job_match.matched_skills %}
+                                <span class="badge badge-success">{{ skill }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge badge-neutral">No listed skills matched</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <strong style="font-size: 13px; color: var(--danger-text);">Missing Job Skills:</strong>
+                    <div class="badge-list">
+                        {% if report.job_match.missing_skills %}
+                            {% for skill in report.job_match.missing_skills %}
+                                <span class="badge badge-danger">{{ skill }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge badge-success">All detected job skills covered</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-2col" style="margin-top: 16px;">
+                <div>
+                    <strong style="font-size: 13px; color: var(--text-main);">Matching Keywords:</strong>
+                    <div class="badge-list">
+                        {% if report.job_match.matched_keywords %}
+                            {% for kw in report.job_match.matched_keywords %}
+                                <span class="badge badge-neutral">{{ kw }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge badge-neutral">None matched</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <strong style="font-size: 13px; color: var(--text-muted);">Missing Keywords:</strong>
+                    <div class="badge-list">
+                        {% if report.job_match.missing_keywords %}
+                            {% for kw in report.job_match.missing_keywords %}
+                                <span class="badge badge-neutral" style="color: var(--danger-text);">{{ kw }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="badge badge-success">All job keywords covered</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ATS Score Breakdown -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">ATS Score Breakdown</h2>
+                    <p class="card-desc">Weighted evaluation of criteria tested against automated screening benchmarks.</p>
+                </div>
+            </div>
+
+            <div class="breakdown-list">
+                
+                <!-- Skills -->
+                <div class="breakdown-row">
+                    <div class="breakdown-label">Technical Skills (40%)</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: {{ report.skill_score }}%;"></div>
+                    </div>
+                    <div class="breakdown-value">{{ report.skill_score }}%</div>
+                </div>
+
+                <!-- Sections -->
+                <div class="breakdown-row">
+                    <div class="breakdown-label">Standard Sections (20%)</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: {{ report.section_score }}%;"></div>
+                    </div>
+                    <div class="breakdown-value">{{ report.section_score }}%</div>
+                </div>
+
+                <!-- Keywords -->
+                <div class="breakdown-row">
+                    <div class="breakdown-label">Action Keywords (20%)</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: {{ report.keyword_score }}%;"></div>
+                    </div>
+                    <div class="breakdown-value">{{ report.keyword_score }}%</div>
+                </div>
+
+                <!-- Projects + Experience -->
+                <div class="breakdown-row">
+                    <div class="breakdown-label">Projects &amp; Experience (10%)</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: {{ report.project_experience_score }}%;"></div>
+                    </div>
+                    <div class="breakdown-value">{{ report.project_experience_score }}%</div>
+                </div>
+
+                <!-- Formatting -->
+                <div class="breakdown-row">
+                    <div class="breakdown-label">ATS Formatting (10%)</div>
+                    <div class="progress-track">
+                        <div class="progress-fill" style="width: {{ report.format_score }}%;"></div>
+                    </div>
+                    <div class="breakdown-value">{{ report.format_score }}%</div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Skills Breakdown (Found vs Missing) -->
+        <div class="grid-2col">
+            
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h3 class="card-title">Skills Detected ({{ report.found_skills|length }})</h3>
+                        <p class="card-desc">Technical competencies identified in your resume.</p>
+                    </div>
+                </div>
+                <div class="badge-list">
+                    {% if report.found_skills %}
+                        {% for skill in report.found_skills %}
+                            <span class="badge badge-success">{{ skill }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <div style="font-size: 13px; color: var(--text-muted);">No tracked skills found in resume text.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h3 class="card-title">Missing Skills ({{ report.missing_skills|length }})</h3>
+                        <p class="card-desc">Industry skills not detected from the standard checklist.</p>
+                    </div>
+                </div>
+                <div class="badge-list">
+                    {% if report.missing_skills %}
+                        {% for skill in report.missing_skills %}
+                            <span class="badge badge-danger">{{ skill }}</span>
+                        {% endfor %}
+                    {% else %}
+                        <div style="font-size: 13px; color: var(--success-text);">All tracked technical skills found.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Resume Sections & Formatting Checklist -->
+        <div class="grid-2col">
+            
+            <!-- Sections Checklist -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Standard Sections Audit</h3>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Section Name</th>
+                            <th style="text-align: right;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for section in all_sections %}
+                            <tr>
+                                <td>{{ section }}</td>
+                                <td style="text-align: right;">
+                                    {% if section in report.found_sections %}
+                                        <span class="badge badge-success">Present</span>
+                                    {% else %}
+                                        <span class="badge badge-danger">Missing</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Formatting Hygiene -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Formatting &amp; Readability</h3>
+                </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Check</th>
+                            <th style="text-align: right;">Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Email Address</td>
+                            <td style="text-align: right;">
+                                {% if report.formatting_details.has_email %}
+                                    <span class="badge badge-success">Detected</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Not Detected</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Phone Number</td>
+                            <td style="text-align: right;">
+                                {% if report.formatting_details.has_phone %}
+                                    <span class="badge badge-success">Detected</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Not Detected</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Word Count (&ge; 150 words)</td>
+                            <td style="text-align: right;">
+                                {% if report.formatting_details.word_count_ok %}
+                                    <span class="badge badge-success">{{ report.word_count }} words</span>
+                                {% else %}
+                                    <span class="badge badge-danger">{{ report.word_count }} words (Too Short)</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Document Length (500 - 12k chars)</td>
+                            <td style="text-align: right;">
+                                {% if report.formatting_details.length_ok %}
+                                    <span class="badge badge-success">Optimal</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Out of Range</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Core Sections (Education + Skills)</td>
+                            <td style="text-align: right;">
+                                {% if report.formatting_details.has_core_sections %}
+                                    <span class="badge badge-success">Present</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Incomplete</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <!-- Action Keywords Detected -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">Action &amp; Technical Keywords</h3>
+                    <p class="card-desc">Action verbs and operational keywords found in your resume.</p>
+                </div>
+                <span class="badge badge-neutral">{{ report.found_keywords|length }} of {{ total_keywords }} matched</span>
+            </div>
+            <div class="badge-list">
+                {% if report.found_keywords %}
+                    {% for kw in report.found_keywords %}
+                        <span class="badge badge-neutral" style="font-family: var(--font-mono);">{{ kw }}</span>
+                    {% endfor %}
+                {% else %}
+                    <div style="font-size: 13px; color: var(--text-muted);">No common action keywords detected.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Improvement Suggestions -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">Recommendations for Improvement</h3>
+                    <p class="card-desc">Practical action items based on the analysis rules.</p>
+                </div>
+            </div>
+            <ol class="suggestions-list">
+                {% for suggestion in report.suggestions %}
+                    <li>{{ suggestion }}</li>
+                {% endfor %}
+            </ol>
+        </div>
+
+        <!-- Retest with Job Description Form -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">Test Against a Job Description</h3>
+                    <p class="card-desc">
+                        Paste a job posting below to compare with this uploaded resume without having to re-upload.
+                    </p>
+                </div>
+            </div>
+            <form action="/match" method="POST">
+                <div class="form-group">
+                    <textarea 
+                        name="job_description" 
+                        class="textarea-solid" 
+                        placeholder="Paste target job description here..."
+                        required
+                    ></textarea>
+                </div>
+                <button type="submit" class="btn btn-dark">
+                    Calculate Job Match Score
+                </button>
+            </form>
+        </div>
+
+        <!-- Action Links -->
+        <div class="button-row" style="margin-bottom: 24px;">
+            <a href="/download" class="btn btn-success btn-large">
+                Download PDF Report
+            </a>
+            <a href="/" class="btn btn-secondary btn-large">
+                Analyze Another Resume
+            </a>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        Resume Analyzer &bull; Student Project &bull; Built with Python &amp; Flask &bull; Zero external trackers
+    </footer>
+
+</body>
+</html>

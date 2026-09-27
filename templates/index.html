@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Analyzer - Student Project</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+        <div class="top-bar-inner">
+            <a href="/" class="brand">
+                <span class="brand-title">Resume Analyzer</span>
+                <span class="tag-student">Student Project</span>
+            </a>
+            <nav class="nav-links">
+                <a href="#how-it-works" class="nav-link">How It Works</a>
+                <a href="#methodology" class="nav-link">Methodology</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+
+        <div class="page-intro">
+            <h1 class="page-title">Resume &amp; ATS Analysis Tool</h1>
+            <p class="page-subtitle">
+                An automated parser built to check resume structure, detect technical skills, evaluate keyword density, and optionally score alignment against a target job description.
+            </p>
+        </div>
+
+        {% if error %}
+        <div class="card" style="border-color: var(--danger-border); background-color: var(--danger-bg); color: var(--danger-text); padding: 12px 16px;">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Form Card -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h2 class="card-title">Upload &amp; Analyze</h2>
+                    <p class="card-desc">Select your resume in PDF format. Job description is optional.</p>
+                </div>
+            </div>
+
+            <form id="analyze-form" action="/analyze" method="POST" enctype="multipart/form-data">
+                
+                <!-- Resume Upload -->
+                <div class="form-group">
+                    <label class="form-label" for="resume-input">
+                        1. Resume Document (PDF) <span style="color: var(--danger-text);">*</span>
+                    </label>
+
+                    <div class="file-dropzone" id="dropzone" onclick="document.getElementById('resume-input').click()">
+                        <input 
+                            type="file" 
+                            id="resume-input" 
+                            name="resume" 
+                            accept=".pdf" 
+                            required
+                            onchange="handleFileSelect(this)"
+                        >
+                        <div class="file-prompt-main">Click to select PDF or drag and drop here</div>
+                        <div class="file-prompt-sub">Only standard PDF files are supported (max 10MB)</div>
+                        <div id="file-info" class="file-selected-info"></div>
+                    </div>
+                    <div class="form-hint">Tip: Use a standard text-based PDF rather than scanned image PDFs for accurate text extraction.</div>
+                </div>
+
+                <!-- Job Description (Optional) -->
+                <div class="form-group">
+                    <label class="form-label" for="job_description">
+                        2. Target Job Description <span class="form-label-optional">(Optional)</span>
+                    </label>
+                    <textarea 
+                        id="job_description" 
+                        name="job_description" 
+                        class="textarea-solid" 
+                        placeholder="Paste the target job description here to calculate a Resume-to-Job Match Score...&#10;&#10;Example:&#10;Seeking a Software Engineer experienced in Python, SQL, REST APIs, Git, Docker, and cloud deployments."
+                    ></textarea>
+                    <div class="form-hint">If left blank, the tool runs a standard general ATS audit on your resume.</div>
+                </div>
+
+                <!-- Submit / Actions -->
+                <div class="button-row">
+                    <button type="submit" class="btn btn-dark btn-large" id="submit-btn">
+                        Run Analysis
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-large" onclick="resetForm()">
+                        Clear
+                    </button>
+                </div>
+
+                <div id="loading-box" class="loading-box">
+                    [ Status ] Extracting text from PDF and computing scores... Please wait.
+                </div>
+
+            </form>
+        </div>
+
+        <!-- How it works / Student Project Documentation -->
+        <div class="card" id="how-it-works">
+            <div class="card-header">
+                <h2 class="card-title">How It Works</h2>
+            </div>
+            <div class="grid-2col">
+                <div>
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">1. Text Extraction &amp; Parsing</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+                        The uploaded PDF is processed in Python using PyPDF. All text content across pages is extracted into a normalized memory buffer without saving personal documents to disk.
+                    </p>
+
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">2. ATS Formatting &amp; Sections</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                        Checks for essential resume sections (Education, Skills, Projects, Experience, Certifications) and basic ATS hygiene including email, phone number, and minimum word count.
+                    </p>
+                </div>
+
+                <div>
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">3. Skill &amp; Keyword Detection</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 14px;">
+                        The resume is tokenized and scanned using word-boundary regular expressions against core technical competencies and action-oriented engineering keywords.
+                    </p>
+
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">4. Job Match Comparison</h3>
+                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+                        When a job posting is supplied, stopword-filtered keywords and required skills are extracted and cross-referenced to compute a tailored match score.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scoring Methodology -->
+        <div class="card" id="methodology">
+            <div class="card-header">
+                <h2 class="card-title">ATS Scoring Weights</h2>
+            </div>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Weight</th>
+                        <th>Criteria</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Technical Skills</strong></td>
+                        <td>40%</td>
+                        <td>Coverage of detected programming languages, frameworks, and databases</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Standard Sections</strong></td>
+                        <td>20%</td>
+                        <td>Presence of Education, Skills, Projects, Experience, and Certifications</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Action Keywords</strong></td>
+                        <td>20%</td>
+                        <td>Presence of engineering action verbs (develop, design, implement, deploy, optimize)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Projects &amp; Experience</strong></td>
+                        <td>10%</td>
+                        <td>Dedicated sections demonstrating practical implementation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ATS Formatting</strong></td>
+                        <td>10%</td>
+                        <td>Contact information formatting, length criteria, and text readability</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        Resume Analyzer &bull; Student Project &bull; Built with Python &amp; Flask &bull; Resumes processed in-memory
+    </footer>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('resume-input');
+        const fileInfo = document.getElementById('file-info');
+        const form = document.getElementById('analyze-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const loadingBox = document.getElementById('loading-box');
+
+        // Drag and drop events
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            }, false);
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect(fileInput);
+            }
+        });
+
+        function handleFileSelect(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                if (!file.name.toLowerCase().endsWith('.pdf')) {
+                    alert('Please select a valid PDF file (.pdf)');
+                    input.value = '';
+                    fileInfo.style.display = 'none';
+                    return;
+                }
+                const sizeKb = (file.size / 1024).toFixed(1);
+                fileInfo.textContent = `Selected: ${file.name} (${sizeKb} KB)`;
+                fileInfo.style.display = 'block';
+            } else {
+                fileInfo.style.display = 'none';
+            }
+        }
+
+        form.addEventListener('submit', function(e) {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                alert('Please select a resume PDF to analyze.');
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            loadingBox.style.display = 'block';
+        });
+
+        function resetForm() {
+            form.reset();
+            fileInfo.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Run Analysis';
+            loadingBox.style.display = 'none';
+        }
+    </script>
+
+</body>
+</html>
